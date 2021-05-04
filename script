@@ -1,0 +1,419 @@
+#!/bin/bash
+
+# Check correct parameters
+#
+checkParameter() {
+    if (( $# > 1 ))
+    then
+        echo "Usage: pathdisplay [ dir-name ]"
+        exit 1
+    fi
+}
+
+# Assign $1 to searchPath variable
+#
+assignFirstArg () {
+    if [[ "$1" != "" ]]
+    then
+        searchPath=$1
+    fi   
+}
+
+# Check if searchPath variable is a existing directory or not
+#
+checkIfDirExist () {
+    if [ ! -d $searchPath ]
+    then    
+        echo "$searchPath is not a valid directory name"
+        exit 1
+    fi
+}
+
+
+# Print the permission of each specified element in the entered path
+#
+printPermission() {
+    clear
+    echo "Owner   Group   Other   Filename"
+    echo "-----   -----   -----   --------"
+    count=0
+    if (( $# == 0 ))
+    then
+        searchPath=$PWD
+    fi
+    lastOne="$(echo $searchPath | xargs | tail -c 2)"
+    if [ $searchPath == "/" ]
+    then
+        count=0
+    else
+        if [ -d $searchPath ]
+        then
+            cd $searchPath
+            searchPath=$PWD
+        fi        
+        
+        count=`expr $(echo $searchPath | grep -o "/" | wc -l) + 2`
+        let lineOfFile=count-1
+        let addCursor=lineOfFile-1
+        let cursor=2+addCursor*2
+        
+        loopCount=1
+        checkPath=""
+        while (( count != loopCount ))
+        do
+
+            dir="$(echo $searchPath | cut -d "/" -f$loopCount)"
+            if [ "$dir" == "" ]
+            then
+                dir="/"
+            fi
+            let loopCount=loopCount+1
+
+            slash="/"
+            if [ checkPath == "/" ]
+            then
+                checkPath="$checkPath$dir"                
+            else    
+                checkPath="$checkPath$dir$slash"                
+            fi
+            if [ ! -d "$checkPath" ]    
+            then        
+                echo "In the specified path, $dir doesn't exist"
+                exit 1
+            else
+                permission=$(ls -ld $checkPath)
+                link="$(echo $permission | awk '{print $2}')"
+                owner="$(echo $permission | awk '{print $3}')"
+                group="$(echo $permission | awk '{print $4}')"
+                size="$(echo $permission | awk '{print $5}')"
+                modifiedMonth="$(echo $permission | awk '{print $6}')"
+                modifiedDay="$(echo $permission | awk '{print $7}')"
+                modifiedYearOrTime="$(echo $permission | awk '{print $8}')"
+                userPermission="$(echo $permission | head -c4 | tail -c3 | sed 's/./& /g')"
+                groupPermission=" $(echo $permission | head -c7 | tail -c3 | sed 's/./& /g')"
+                otherPermission=" $(echo $permission | head -c10 | tail -c3 | sed 's/./& /g' ) "               
+                line="$userPermission $groupPermission $otherPermission $dir"
+                additionalInfo="  Links: $link  Owner: $owner  Group: $group  Size: $size  Modified: $modifiedMonth $modifiedDay $modifiedYearOrTime"
+                if [ "$(echo "$line" | egrep '[ drwx-]{23}[-T].*')" != "" ]
+                then
+                    echo "$line" | egrep --color=always '[ drwx-]{23}[-T].*'
+                else
+                    let lineNum=(loopCount-1)*2
+                    let arrIndex=loopCount-1
+                    echo -e "$line"
+                    additionalInfoArr[arrIndex]="$additionalInfo"  # create an array to store the additional infos
+                    dirsArray[arrIndex]="$checkPath" # create an array to store the directories
+                    # for default, starting point
+                    if [ $cursor -eq $lineNum ]
+                    then
+                        echo "$additionalInfo"                        
+                    else
+                        echo ""
+                    fi
+                fi
+            fi
+        done
+    fi
+    displayCommandOptions
+}
+
+# function to handle cursor by 'u' and 'd'
+# and to use 'q' to terminate the script
+#
+handleCursor () {    
+    stty -icanon min 1 time 0 -echo
+    while true
+    do
+        
+        tput cup $cursor $leftRight # default cursor level, the last filename
+        
+        command=$(dd bs=3 count=1 2> /dev/null)
+        case $command in
+            j)  let limit=lineOfFile*2
+                # only do down when it's not the last line of filename
+                if [ $cursor -lt $limit ]
+                then
+                    # move cursor down 2 rows
+                    cursor=$((cursor + 2))
+                    let index=cursor/2
+                    # position to previous row, which is the row with additional info
+                    tput cup $((cursor - 1)) 0
+                    # and remove it
+                    tput el
+                    # and go back to the row it sohuld be displaying the new additional info
+                    tput cup $((cursor + 1)) 0
+                    printf "${additionalInfoArr[$index]}"
+                fi
+                ;;
+            k)  let min=2
+                # only do up when it's not in the first line of filename
+                if [ $cursor -gt $min ]
+                then
+                    # move cursor up 2 rows
+                    cursor=$((cursor - 2))
+                    let index=cursor/2
+                    # position to next row, which is the row that should put additional info
+                    tput cup $((cursor + 1)) 0
+                    # and print the additional info                    
+                    printf "${additionalInfoArr[$index]}"
+                    # and position to the row that has old additional info
+                    tput cup $((cursor + 3)) 0
+                    # and remove it
+                    tput el                    
+
+                fi
+                ;;
+            h)  # if leftRight is greater than 0
+                if [ $leftRight -gt 0 ]
+                then
+                    # move cursur left 1 column
+                    leftRight=$((leftRight - 1))
+                fi
+                ;;
+            l)  # if leftRight is not greater than the filename
+                if [ $leftRight -lt 24 ]
+                then
+                    # move cursor right 1 column
+                    leftRight=$((leftRight + 1))
+                fi
+                ;;
+            r)  # if cursor is on read permission position # [ $leftRight -eq 0 ] || [ $leftRight -eq 8 ] ||
+                if [ $leftRight -eq 16 ]
+                then
+                    let index=cursor/2                    
+                    # printf "${dirsArray[$index]}"
+                    # add read permission to other
+                    chmod o+r ${dirsArray[$index]} 2> /dev/null
+
+                    # if command success
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "r"
+                    fi
+
+                elif [ $leftRight -eq 8 ]
+                then
+                    let index=cursor/2
+                    # add read permission to group
+                    chmod g+r ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "r"
+                    fi
+                elif [ $leftRight -eq 0 ]
+                then
+                    let index=cursor/2
+                    # add read permission to user
+                    chmod u+r ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "r"
+                    fi
+                fi
+                ;;
+            w)  # if cursor is on write permissions 2 10 18
+                if [ $leftRight -eq 18 ]
+                then
+                    let index=cursor/2
+                    chmod o+w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "w"
+                    fi                    
+                elif [ $leftRight -eq 10 ]
+                then
+                    let index=cursor/2
+                    chmod g+w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "w"
+                    fi     
+                elif [ $leftRight -eq 2 ]
+                then
+                    let index=cursor/2
+                    chmod u+w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "w"
+                    fi     
+                fi
+                ;;
+            x)  # if cursor is on execute permission 4 12 20
+                if [ $leftRight -eq 20 ]
+                then
+                    let index=cursor/2
+                    chmod o+x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "x"
+                    fi     
+                # if cursor is on group execute permission
+                elif [ $leftRight -eq 12 ]
+                then
+                    let index=cursor/2
+                    chmod g+x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "x"
+                    fi     
+                # if cursor is on user execute permission
+                elif [ $leftRight -eq 20 ]
+                then
+                    let index=cursor/2
+                    chmod u+x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        printf "x"
+                    fi     
+                fi
+                ;;
+            -)  # if cursor is on others execute permission 4 12 20
+                if [ $leftRight -eq 20 ]
+                then
+                    let index=cursor/2
+                    # remove execute permmsion to others
+                    chmod o-x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi   
+                # if cursor is on group execute permission
+                elif [ $leftRight -eq 12 ]
+                then
+                    let index=cursor/2
+                    chmod g-x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on user execute permission
+                elif [ $leftRight -eq 20 ]
+                then
+                    let index=cursor/2
+                    chmod u-x ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on other write permission 2 10 18
+                elif [ $leftRight -eq 18 ]
+                then 
+                    let index=cursor/2
+                    chmod o-w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on group write permission
+                elif [ $leftRight -eq 10 ]
+                then
+                    let index=cursor/2
+                    chmod g-w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on user write permission
+                elif [ $leftRight -eq 2 ]
+                then
+                    let index=cursor/2
+                    chmod u-w ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on other read permission 16 8 0
+                elif [ $leftRight -eq 16 ]
+                then 
+                    let index=cursor/2
+                    chmod o-r ${dirsArray[$index]} 2> /dev/null
+                    
+                    # if command success
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                # if cursor is on group read permission
+                elif [ $leftRight -eq 8 ]
+                then
+                    let index=cursor/2
+                    chmod g-r ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                elif [ $leftRight -eq 0 ]
+                then
+                    let index=cursor/2
+                    chmod u-r ${dirsArray[$index]} 2> /dev/null
+                    if [ $? == 0 ]
+                    then
+                        tput cup $cursor $leftRight
+                        dash="-"
+                        printf "$dash"
+                    fi
+                fi
+                ;;
+            q)  # bring back echo and exit gracefully
+                stty icanon echo
+                let lineOfFile=lineOfFile*2-1
+                let lineTotal=2+lineOfFile+8+1+1+1+1
+                # bring the cursor (promp line) back to the line right after the script
+                tput cup $lineTotal 0
+                exit 0
+                ;;
+        esac
+            
+    done
+}
+
+displayCommandOptions () {
+    echo -e "\n\n\n\n\n\n\n\nValid keys: k (up), j (down) : move between filenames"
+    echo -e "            h (left), l (right): move between permissions"
+    echo -e "            r, w, x, -: change permissions;   q: quit"
+}
+
+# Handle the SIGINT signal such that all temporary file be deleted before finishing the script
+#
+signalHandler() {
+    trap "rm -f /tmp/*$$*;" SIGINT
+}
+
+
+# Call defined function to test the input parameter
+#
+signalHandler $@
+checkParameter $@
+assignFirstArg $@
+checkIfDirExist $@
+declare -a additionalInfoArr
+declare -a dirsArray
+printPermission $@
+declare leftRight=24
+handleCursor
+
