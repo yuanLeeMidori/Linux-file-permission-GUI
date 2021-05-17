@@ -5,7 +5,7 @@
 checkParameter() {
     if (( $# > 1 ))
     then
-        echo "Usage: pathdisplay [ dir-name ]"
+        echo "Usage: permission-tool [ dir-name ]"
         exit 1
     fi
 }
