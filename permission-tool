@@ -122,6 +122,7 @@ printPermission() {
 #
 handleCursor () {    
     stty -icanon min 1 time 0 -echo
+    tput smkx
     while true
     do
         
@@ -129,7 +130,8 @@ handleCursor () {
         
         command=$(dd bs=3 count=1 2> /dev/null)
         case $command in
-            j)  let limit=lineOfFile*2
+            j | $(tput kcud1)) 
+                let limit=lineOfFile*2
                 # only do down when it's not the last line of filename
                 if [ $cursor -lt $limit ]
                 then
@@ -145,7 +147,8 @@ handleCursor () {
                     printf "${additionalInfoArr[$index]}"
                 fi
                 ;;
-            k)  let min=2
+            k | $(tput kcuu1))  
+                let min=2
                 # only do up when it's not in the first line of filename
                 if [ $cursor -gt $min ]
                 then
@@ -163,14 +166,14 @@ handleCursor () {
 
                 fi
                 ;;
-            h)  # if leftRight is greater than 0
+            h | $(tput kcub1))  # if leftRight is greater than 0
                 if [ $leftRight -gt 0 ]
                 then
                     # move cursur left 1 column
                     leftRight=$((leftRight - 1))
                 fi
                 ;;
-            l)  # if leftRight is not greater than the filename
+            l | $(tput kcuf1))  # if leftRight is not greater than the filename
                 if [ $leftRight -lt 24 ]
                 then
                     # move cursor right 1 column
