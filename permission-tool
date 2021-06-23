@@ -396,8 +396,8 @@ handleCursor () {
 }
 
 displayCommandOptions () {
-    echo -e "\n\n\n\n\n\n\n\nValid keys: k (up), j (down) : move between filenames"
-    echo -e "            h (left), l (right): move between permissions"
+    echo -e "\n\n\n\n\n\n\n\nValid keys: k (up arrow), j (down arrow) : move between filenames (up or down)"
+    echo -e "            h (left arrow), l (right arrow): move between permissions (left or right)"
     echo -e "            r, w, x, -: change permissions;   q: quit"
 }
 
