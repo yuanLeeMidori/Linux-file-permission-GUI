@@ -55,8 +55,8 @@ r w x   r w x   r - x   Bash-Practice
 
 
 
-Valid keys: k (up), j (down) : move between filenames
-            h (left), l (right): move between permissions
+Valid keys: k (up arrow), j (down arrow) : move between filenames (up or down)
+            h (left arrow), l (right arrow): move between permissions (left or right)
             r, w, x, -: change permissions;   q: quit
 ```
 
@@ -70,4 +70,6 @@ To grant the permission, for example, you move the cursor to the `-` in the line
 
 ## Contribute
 
-Coming soon!
+When you see a bug or you have a brilliant idea that you want to contribute, feel free to [file an issue](https://github.com/yuanLeeMidori/Linux-file-permission-console-app/issues/new) for me! 
+
+Also, if there is an issue without any assignee and you want to work on it, feel free to *leave a comment* and I'll get back to you ASAP :satisfied:
